@@ -7,10 +7,10 @@ let
 in
 
 {
-  hylo-holo-dnas = buildDNA {
+  holo-communities-dna = buildDNA {
     inherit shell;
 
-    name = "hylo-holo-dnas";
+    name = "holo-communities-dna";
     src = gitignoreSource ./.;
 
     nativeBuildInputs = [
