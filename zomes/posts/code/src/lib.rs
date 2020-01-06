@@ -4,8 +4,6 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
-#[macro_use]
-extern crate holochain_json_derive;
 
 use hdk::{
     error::ZomeApiResult,
@@ -19,7 +17,7 @@ mod post;
 define_zome! {
     entries: [
         post::post_def(),
-        post::base_def()
+        post::post_time_anchor_def()
     ]
 
     init: || { Ok(()) }
@@ -44,12 +42,12 @@ define_zome! {
             handler: post::get
         }
         create: {
-            inputs: |base: String, title: String, details: String, post_type: String, announcement: bool, timestamp: String|,
+            inputs: |base: String, title: String, details: String, post_type: String, announcement: bool, timestamp: u128|,
             outputs: |result: ZomeApiResult<post::PostWithAddress>|,
             handler: post::create
         }
         all_for_base: {
-            inputs: |base: String, timestamp: u64, since: Option<Address>, limit: Option<usize>|,
+            inputs: |base: String, limit: Option<usize>|,
             outputs: |result: ZomeApiResult<post::GetPostsResult>|,
             handler: post::all_for_base
         }

@@ -1,10 +1,26 @@
 use std::time::{Duration};
 use hdk::prelude::*;
 
-pub fn commit_if_not_in_chain(entry: &Entry) -> ZomeApiResult<Address> {
+// Check the local chain for an identical entry
+// This is a good thing to do before committing something since otherwise identical entries will build up
+// This will always prevent duplicates in the chain
+pub fn is_in_chain(entry: &Entry) -> ZomeApiResult<bool> {
     // use query to check the chain. When there is an HDK function doing this directly use it instead
     let existing_entries = hdk::query(entry.entry_type().into(), 0, 0)?;
-    if existing_entries.contains(&entry.address()) {
+    Ok(existing_entries.contains(&entry.address()))
+}
+
+
+// Check the DHT for an identical entry
+// This does not come with the same guarantees as checking the chain.
+// If you do see an entry you can be sure it does exist.
+// If you don't it may still exist somewhere unavailable to you at this time.
+pub fn is_in_dht(entry: &Entry) -> ZomeApiResult<bool> {
+    Ok(hdk::get_entry(&entry.address())?.is_some())
+}
+
+pub fn commit_if_not_in_chain(entry: &Entry) -> ZomeApiResult<Address> {
+    if is_in_chain(entry)? {
         // do nothing and be happy
         Ok(entry.address())
     } else {
@@ -14,7 +30,7 @@ pub fn commit_if_not_in_chain(entry: &Entry) -> ZomeApiResult<Address> {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, DefaultJson, PartialEq)]
-pub struct TimeAnchor(String);
+pub struct TimeAnchor(pub String);
 
 pub struct TimeAnchorTreeSpec {
     smallest_time_block: Duration, // size of smallest unit (e.g. 1 hour)
