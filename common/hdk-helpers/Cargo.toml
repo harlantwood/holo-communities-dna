@@ -8,3 +8,5 @@ edition = "2018"
 
 [dependencies]
 hdk = { path = "../../holochain-rust/crates/hdk" }
+serde = "=1.0.89"
+serde_json = { version = "=1.0.39", features = ["preserve_order"] }
