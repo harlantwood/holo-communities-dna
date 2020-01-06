@@ -127,14 +127,14 @@ pub fn create(
  * @brief      Traverse the graph and recover all the posts (possibly up to a given limit)
  *
  * @param      base        The base/community for these posts. This is a string and can be considered equivalent to a database table name
- *                         
- * @param      limit       Number of posts to return as a maximum. If this limit is hit will return true for the more boolean
- *
+ * @param      limit       Number of posts to return as a maximum. If this limit is hit will return true for the more boolean    
+ * @param      before      Only return posts that occur before this timestamp (ms since unix epoch)
  * @return     Returns a tuple of the returned entries/addresses and a bool which is true if there are more posts available
  */
 pub fn all_for_base(
     base: String,
     limit: Option<usize>,
+    before: Option<u128>,
 ) -> ZomeApiResult<GetPostsResult> {
 
     // start at the root and traverse the tree taking the newest branch each time
@@ -146,6 +146,7 @@ pub fn all_for_base(
     while let Some(current) = to_visit.pop() {
         // add the children to the stack
         for addr in hdk::get_links(&current, LinkMatch::Exactly(TIME_ANCHOR_TO_TIME_ANCHOR_LINK_TYPE), LinkMatch::Any)?.addresses() {
+            // only add links to visit if they are before the `before` timestamp (if it is given)
             to_visit.push(addr)
         }
         // add any post children to the result (should only be on leaves)
@@ -153,7 +154,7 @@ pub fn all_for_base(
             if let Some(limit) = limit {
                 if post_addrs.len() < limit {
                     post_addrs.push(post_addr);
-                // } else {
+                } else {
                     more = true;
                     break;
                 }

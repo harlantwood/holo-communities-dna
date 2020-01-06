@@ -30,7 +30,19 @@ pub fn commit_if_not_in_chain(entry: &Entry) -> ZomeApiResult<Address> {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, DefaultJson, PartialEq)]
-pub struct TimeAnchor(pub String);
+pub struct TimeAnchor {
+    pub start_timestamp: u128,
+    pub time_span: u128,
+}
+
+impl TimeAnchor {
+    pub fn new(start_timestamp: u128, time_span: u128) -> Self {
+        Self {
+            start_timestamp,
+            time_span,
+        }
+    }
+}
 
 pub struct TimeAnchorTreeSpec {
     smallest_time_block: Duration, // size of smallest unit (e.g. 1 hour)
@@ -58,9 +70,9 @@ impl TimeAnchorTreeSpec {
      * @return     A path definition as a vector of time anchors
      */
     pub fn entry_path_from_timestamp(&self, timestamp_ms: u128) -> Vec<TimeAnchor> {
-        vec![1].iter().chain(self.divisions.iter()).enumerate().map(|(height, blocks)| {
+        vec![1].iter().chain(self.divisions.iter()).map(|blocks| {
             let block_number = timestamp_ms / ((*blocks as u128) * self.smallest_time_block.as_millis());
-            TimeAnchor(format!("{}-{}", height, block_number))  // Uses encoding where "2-100" would be be the 3rd layer from the bottom, 100th anchor
+            TimeAnchor::new(block_number*(*blocks as u128)*self.smallest_time_block.as_millis(), (*blocks as u128)*self.smallest_time_block.as_millis())  // Uses encoding where "2-100" would be be the 3rd layer from the bottom, 100th anchor
                                                                 // This is not super important but ensures that each anchor string is unique
         }).collect()
     }
@@ -78,9 +90,9 @@ pub mod tests {
         assert_eq!(
             path,
             vec![
-                TimeAnchor("0-0".to_string()),
-                TimeAnchor("1-0".to_string()),
-                TimeAnchor("2-0".to_string())
+                TimeAnchor::new(0, 60*1000),
+                TimeAnchor::new(0, 60*1000*5),
+                TimeAnchor::new(0, 60*1000*10),
             ]
         );
     }
@@ -89,13 +101,13 @@ pub mod tests {
     fn can_create_path_for_timestamp_later_blocks() {
         // anchors for every minute, 5 minutes and 10 minutes
         let spec = TimeAnchorTreeSpec::new(Duration::from_secs(60), vec![5, 10]);
-        let path = spec.entry_path_from_timestamp(1000*60*11); // 11 minutes after the epoch
+        let path = spec.entry_path_from_timestamp(1000*60*11 - 1); // not quite 11 minutes after the epoch
         assert_eq!(
             path,
             vec![
-                TimeAnchor("0-11".to_string()),
-                TimeAnchor("1-2".to_string()),
-                TimeAnchor("2-1".to_string())
+                TimeAnchor::new(60*1000*10, 60*1000),
+                TimeAnchor::new(60*1000*10, 60*1000*5),
+                TimeAnchor::new(60*1000*10, 60*1000*10),
             ]
         );
     }

@@ -47,7 +47,7 @@ define_zome! {
             handler: post::create
         }
         all_for_base: {
-            inputs: |base: String, limit: Option<usize>|,
+            inputs: |base: String, limit: Option<usize>, before: Option<u128>|,
             outputs: |result: ZomeApiResult<post::GetPostsResult>|,
             handler: post::all_for_base
         }
