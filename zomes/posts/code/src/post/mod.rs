@@ -13,6 +13,8 @@ use hdk::{
 use hdk::prelude::*;
 use hdk_helpers::{TimeAnchorTreeSpec, TimeAnchor};
 use std::time::Duration;
+use std::convert::TryFrom;
+// use itertools::Itertools;
 
 // This specifices the stucture of the time anchors.
 // This has the structure hours->days->weeks
@@ -111,9 +113,10 @@ pub fn create(
         );
         if !hdk_helpers::is_in_chain(&anchor_entry)? && !hdk_helpers::is_in_dht(&anchor_entry)? {
             hdk::commit_entry(&anchor_entry)?;
+            // link the chain of anchors
+            // OOoh tricky - put the entry in the tag of the link to save loads of get_entry calls later on ;)
+            hdk::link_entries(&last_anchor_addr, &anchor_entry.address(), TIME_ANCHOR_TO_TIME_ANCHOR_LINK_TYPE, &JsonString::from(anchor).to_string())?;
         }
-        // link the chain of anchors
-        hdk::link_entries(&last_anchor_addr, &anchor_entry.address(), TIME_ANCHOR_TO_TIME_ANCHOR_LINK_TYPE, "")?;
         last_anchor_addr = anchor_entry.address();
     }
     
@@ -134,7 +137,7 @@ pub fn create(
 pub fn all_for_base(
     base: String,
     limit: Option<usize>,
-    _before: Option<u128>,
+    before: Option<u128>,
 ) -> ZomeApiResult<GetPostsResult> {
 
     // start at the root and traverse the tree taking the newest branch each time
@@ -145,9 +148,17 @@ pub fn all_for_base(
     let mut more = false;
     while let Some(current) = to_visit.pop() {
         // add the children to the stack
-        for addr in hdk::get_links(&current, LinkMatch::Exactly(TIME_ANCHOR_TO_TIME_ANCHOR_LINK_TYPE), LinkMatch::Any)?.addresses() {
+        for link in hdk::get_links(&current, LinkMatch::Exactly(TIME_ANCHOR_TO_TIME_ANCHOR_LINK_TYPE), LinkMatch::Any)?.links() {
             // only add links to visit if they are before the `before` timestamp (if it is given)
-            to_visit.push(addr)
+            if let Some(before) = before {
+                let time_anchor = TimeAnchor::try_from(JsonString::from_json(&link.tag)).unwrap();
+                if time_anchor.start_timestamp < before {
+                    to_visit.push(link.address)
+                }
+            } else {
+                to_visit.push(link.address)
+            }
+            
         }
         // add any post children to the result (should only be on leaves)
         for post_addr in hdk::get_links(&current, LinkMatch::Exactly(TIME_ANCHOR_TO_POST_LINK_TYPE), LinkMatch::Any)?.addresses() {
@@ -165,9 +176,10 @@ pub fn all_for_base(
     }
 
     // actually load all the posts from their addresses
-    let posts = post_addrs.into_iter().map(|addr| {
-        let post: Post = hdk::utils::get_as_type(addr.clone()).unwrap();
-        post.with_address(addr)
+    let posts = post_addrs.into_iter().filter_map(|addr| {
+        hdk::utils::get_as_type::<Post>(addr.clone()).map(|post| {
+            post.with_address(addr)
+        }).ok()
     }).collect();
 
     Ok(GetPostsResult { posts, more })
