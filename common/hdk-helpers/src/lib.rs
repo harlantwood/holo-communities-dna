@@ -33,13 +33,15 @@ pub fn commit_if_not_in_chain(entry: &Entry) -> ZomeApiResult<Address> {
 pub struct TimeAnchor {
     pub start_timestamp: u128,
     pub time_span: u128,
+    pub tag: String,
 }
 
 impl TimeAnchor {
-    pub fn new(start_timestamp: u128, time_span: u128) -> Self {
+    pub fn new(start_timestamp: u128, time_span: u128, tag: String) -> Self {
         Self {
             start_timestamp,
             time_span,
+            tag,
         }
     }
 }
@@ -69,10 +71,14 @@ impl TimeAnchorTreeSpec {
      *
      * @return     A path definition as a vector of time anchors
      */
-    pub fn entry_path_from_timestamp(&self, timestamp_ms: u128) -> Vec<TimeAnchor> {
+    pub fn entry_path_from_timestamp(&self, timestamp_ms: u128, tag: &str) -> Vec<TimeAnchor> {
         vec![1].iter().chain(self.divisions.iter()).map(|blocks| {
             let block_number = timestamp_ms / ((*blocks as u128) * self.smallest_time_block.as_millis());
-            TimeAnchor::new(block_number*(*blocks as u128)*self.smallest_time_block.as_millis(), (*blocks as u128)*self.smallest_time_block.as_millis())  // Uses encoding where "2-100" would be be the 3rd layer from the bottom, 100th anchor
+            TimeAnchor::new(
+                block_number*(*blocks as u128)*self.smallest_time_block.as_millis(),
+                (*blocks as u128)*self.smallest_time_block.as_millis(),
+                tag.to_string(),
+            )  // Uses encoding where "2-100" would be be the 3rd layer from the bottom, 100th anchor
                                                                 // This is not super important but ensures that each anchor string is unique
         }).collect()
     }
@@ -86,13 +92,13 @@ pub mod tests {
     fn can_create_path_for_timestamp_first_block() {
         // anchors for every minute, 5 minutes and 10 minutes
         let spec = TimeAnchorTreeSpec::new(Duration::from_secs(60), vec![5, 10]);
-        let path = spec.entry_path_from_timestamp(100); // strange timestamp 100ms after the epoch :P
+        let path = spec.entry_path_from_timestamp(100, "test"); // strange timestamp 100ms after the epoch :P
         assert_eq!(
             path,
             vec![
-                TimeAnchor::new(0, 60*1000),
-                TimeAnchor::new(0, 60*1000*5),
-                TimeAnchor::new(0, 60*1000*10),
+                TimeAnchor::new(0, 60*1000, "test".to_string()),
+                TimeAnchor::new(0, 60*1000*5, "test".to_string()),
+                TimeAnchor::new(0, 60*1000*10, "test".to_string()),
             ]
         );
     }
@@ -101,13 +107,13 @@ pub mod tests {
     fn can_create_path_for_timestamp_later_blocks() {
         // anchors for every minute, 5 minutes and 10 minutes
         let spec = TimeAnchorTreeSpec::new(Duration::from_secs(60), vec![5, 10]);
-        let path = spec.entry_path_from_timestamp(1000*60*11 - 1); // not quite 11 minutes after the epoch
+        let path = spec.entry_path_from_timestamp(1000*60*11 - 1, "test"); // not quite 11 minutes after the epoch
         assert_eq!(
             path,
             vec![
-                TimeAnchor::new(60*1000*10, 60*1000),
-                TimeAnchor::new(60*1000*10, 60*1000*5),
-                TimeAnchor::new(60*1000*10, 60*1000*10),
+                TimeAnchor::new(60*1000*10, 60*1000, "test".to_string()),
+                TimeAnchor::new(60*1000*10, 60*1000*5, "test".to_string()),
+                TimeAnchor::new(60*1000*10, 60*1000*10, "test".to_string()),
             ]
         );
     }

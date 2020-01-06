@@ -85,7 +85,7 @@ pub fn create(
     announcement: bool,
     timestamp: u128,
 ) -> ZomeApiResult<PostWithAddress> {
-    let base_entry = Entry::App(TIME_ANCHOR_ENTRY_TYPE.into(), TimeAnchor(base.clone()).into());
+    let base_entry = Entry::App(TIME_ANCHOR_ENTRY_TYPE.into(), TimeAnchor::new(0, 0, base.clone()).into());
     let base_address = hdk::commit_entry(&base_entry)?;
 
     let post: Post = Post {
@@ -101,7 +101,7 @@ pub fn create(
     let post_address = hdk::commit_entry(&Entry::App(POST_ENTRY_TYPE.into(), post.clone().into()))?;
 
     // get the anchor path required for this timestamp
-    let path = time_anchor_spec().entry_path_from_timestamp(timestamp);
+    let path = time_anchor_spec().entry_path_from_timestamp(timestamp, &base);
     // commit every anchor on the path (that doesn't already exist)
     let mut last_anchor_addr = base_address;
     for anchor in path.iter().rev() { // need to reverse so the links can be created in order
@@ -134,12 +134,12 @@ pub fn create(
 pub fn all_for_base(
     base: String,
     limit: Option<usize>,
-    before: Option<u128>,
+    _before: Option<u128>,
 ) -> ZomeApiResult<GetPostsResult> {
 
     // start at the root and traverse the tree taking the newest branch each time
     // repeat until `limit` leaves/posts have been visited
-    let base_address = Entry::App(TIME_ANCHOR_ENTRY_TYPE.into(), TimeAnchor(base).into()).address();
+    let base_address = Entry::App(TIME_ANCHOR_ENTRY_TYPE.into(), TimeAnchor::new(0, 0, base).into()).address();
     let mut to_visit = vec![base_address];
     let mut post_addrs = Vec::new();
     let mut more = false;
