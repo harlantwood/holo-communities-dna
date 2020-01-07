@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::time::{Duration};
 use hdk::prelude::*;
 
@@ -29,11 +30,22 @@ pub fn commit_if_not_in_chain(entry: &Entry) -> ZomeApiResult<Address> {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, DefaultJson, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, DefaultJson, Eq, PartialEq)]
 pub struct TimeAnchor {
     pub start_timestamp: u128,
     pub time_span: u128,
     pub tag: String,
+}
+
+impl PartialOrd for TimeAnchor {
+    fn partial_cmp(&self, other: &TimeAnchor) -> Option<Ordering> {
+        Some(self.start_timestamp.cmp(&other.start_timestamp))
+    }
+}
+impl Ord for TimeAnchor {
+    fn cmp(&self, other: &TimeAnchor) -> Ordering {
+        self.start_timestamp.cmp(&other.start_timestamp)
+    }
 }
 
 impl TimeAnchor {

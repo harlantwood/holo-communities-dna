@@ -14,6 +14,7 @@ use hdk::prelude::*;
 use hdk_helpers::{TimeAnchorTreeSpec, TimeAnchor};
 use std::time::Duration;
 use std::convert::TryFrom;
+use std::collections::BinaryHeap;
 // use itertools::Itertools;
 
 // This specifices the stucture of the time anchors.
@@ -142,46 +143,63 @@ pub fn all_for_base(
 
     // start at the root and traverse the tree taking the newest branch each time
     // repeat until `limit` leaves/posts have been visited
-    let base_address = Entry::App(TIME_ANCHOR_ENTRY_TYPE.into(), TimeAnchor::new(0, 0, base).into()).address();
-    let mut to_visit = vec![base_address];
-    let mut post_addrs = Vec::new();
+    let base_anchor = TimeAnchor::new(0, 0, base);
+    let mut to_visit = BinaryHeap::new();
+    to_visit.push(base_anchor);
+    let mut posts = Vec::new();
     let mut more = false;
     while let Some(current) = to_visit.pop() {
-        // add the children to the stack
-        for link in hdk::get_links(&current, LinkMatch::Exactly(TIME_ANCHOR_TO_TIME_ANCHOR_LINK_TYPE), LinkMatch::Any)?.links() {
+        // add the children to the stack such that newest are visited first
+        let current_addr = Entry::App(TIME_ANCHOR_ENTRY_TYPE.into(), current.into()).address();
+        for link in hdk::get_links(&current_addr, LinkMatch::Exactly(TIME_ANCHOR_TO_TIME_ANCHOR_LINK_TYPE), LinkMatch::Any)?.links() {
             // only add links to visit if they are before the `before` timestamp (if it is given)
+            let time_anchor = TimeAnchor::try_from(JsonString::from_json(&link.tag)).unwrap();
             if let Some(before) = before {
-                let time_anchor = TimeAnchor::try_from(JsonString::from_json(&link.tag)).unwrap();
                 if time_anchor.start_timestamp < before {
-                    to_visit.push(link.address)
+                    to_visit.push(time_anchor)
                 }
             } else {
-                to_visit.push(link.address)
+                to_visit.push(time_anchor)
             }
             
         }
-        // add any post children to the result (should only be on leaves)
-        for post_addr in hdk::get_links(&current, LinkMatch::Exactly(TIME_ANCHOR_TO_POST_LINK_TYPE), LinkMatch::Any)?.addresses() {
-            if let Some(limit) = limit {
-                if post_addrs.len() < limit {
-                    post_addrs.push(post_addr);
-                } else {
-                    more = true;
-                    break;
+        // add any post children to the result (should only be on leaves) (also in descending timestamp order)
+        let mut posts_on_base: Vec<Post> = utils::get_links_and_load_type(&current_addr, LinkMatch::Exactly(TIME_ANCHOR_TO_POST_LINK_TYPE), LinkMatch::Any)?;
+        posts_on_base.sort_by(|a, b| {
+            b.timestamp.cmp(&a.timestamp)
+        });
+        for post in posts_on_base {
+            let post_address = Entry::App(POST_ENTRY_TYPE.into(), post.clone().into()).address();
+            match (limit, before) {
+                (Some(limit), Some(before)) => {
+                    if posts.len() < limit {
+                        if post.timestamp < before {
+                            posts.push(post.with_address(post_address));
+                        }
+                    } else {
+                        more = true;
+                        break;
+                    }                    
+                },
+                (Some(limit), _) => {
+                    if posts.len() < limit {
+                        posts.push(post.with_address(post_address));
+                    } else {
+                        more = true;
+                        break;
+                    }
+                },
+                (_, Some(before)) => {
+                    if post.timestamp < before {
+                        posts.push(post.with_address(post_address));
+                    }
+                },
+                (_, _) => {
+                    posts.push(post.with_address(post_address))
                 }
-            } else {
-                post_addrs.push(post_addr);              
             }
         }
     }
-
-    // actually load all the posts from their addresses
-    let posts = post_addrs.into_iter().filter_map(|addr| {
-        hdk::utils::get_as_type::<Post>(addr.clone()).map(|post| {
-            post.with_address(addr)
-        }).ok()
-    }).collect();
-
     Ok(GetPostsResult { posts, more })
 }
 
